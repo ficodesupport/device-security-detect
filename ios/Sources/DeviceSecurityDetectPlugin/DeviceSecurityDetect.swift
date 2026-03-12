@@ -11,6 +11,19 @@ import MachO
             return false
         }
 
+        // MARK: - Function Hook Integrity Checks
+        if isFunctionHooked(unsafeBitCast(self.isDebuggerAttached as @convention(c) () -> Bool, to: UnsafeRawPointer.self)) {
+            return true
+        }
+
+        if isFunctionHooked(unsafeBitCast(self.isSuspiciousSystemPathsExists as @convention(c) () -> Bool, to: UnsafeRawPointer.self)) {
+            return true
+        }
+
+        if isFunctionHooked(unsafeBitCast(self.hasSuspiciousDyldImages as @convention(c) () -> Bool, to: UnsafeRawPointer.self)) {
+            return true
+        }
+
         if hasCydiaInstalled() {
             return true
         }
@@ -43,12 +56,32 @@ import MachO
             return true
         }
         if detectFridaThreads() {
-           return true
-         }
+            return true
+        }
 
         if detectHookingFrameworks() {
-          return true
-         }
+            return true
+        }
+
+        return false
+    }
+
+    // MARK: - Function Hook Detection
+    func isFunctionHooked(_ function: UnsafeRawPointer) -> Bool {
+
+        var info = Dl_info()
+
+        if dladdr(function, &info) != 0 {
+
+            if let imageName = info.dli_fname {
+                let path = String(cString: imageName)
+
+                // If function pointer is redirected outside app binary
+                if !path.contains(Bundle.main.bundlePath) {
+                    return true
+                }
+            }
+        }
 
         return false
     }
@@ -63,55 +96,54 @@ import MachO
     }
 
     // MARK: - Frida Thread Detection
-   func detectFridaThreads() -> Bool {
-    let suspiciousThreads = [
-        "gum-js-loop",
-        "gmain",
-        "gdbus",
-        "frida"
-    ]
+    func detectFridaThreads() -> Bool {
 
-    let symbols = Thread.callStackSymbols
+        let suspiciousThreads = [
+            "gum-js-loop",
+            "gmain",
+            "gdbus",
+            "frida"
+        ]
 
-    for symbol in symbols {
+        let symbols = Thread.callStackSymbols
 
-        for suspicious in suspiciousThreads {
-
-            if symbol.lowercased().contains(suspicious) {
-                return true
-            }
-        }
-    }
-
-    return false
-}
-
-// MARK: - Hook Detection
-func detectHookingFrameworks() -> Bool {
-
-    let hookingIndicators = [
-        "MSHookFunction",
-        "fishhook",
-        "substrate"
-    ]
-
-    for i in 0..<_dyld_image_count() {
-
-        if let imageName = _dyld_get_image_name(i) {
-
-            let name = String(cString: imageName)
-
-            for hook in hookingIndicators {
-
-                if name.localizedCaseInsensitiveContains(hook) {
+        for symbol in symbols {
+            for suspicious in suspiciousThreads {
+                if symbol.lowercased().contains(suspicious) {
                     return true
                 }
             }
         }
+
+        return false
     }
 
-    return false
-}
+    // MARK: - Hook Detection
+    func detectHookingFrameworks() -> Bool {
+
+        let hookingIndicators = [
+            "MSHookFunction",
+            "fishhook",
+            "substrate"
+        ]
+
+        for i in 0..<_dyld_image_count() {
+
+            if let imageName = _dyld_get_image_name(i) {
+
+                let name = String(cString: imageName)
+
+                for hook in hookingIndicators {
+
+                    if name.localizedCaseInsensitiveContains(hook) {
+                        return true
+                    }
+                }
+            }
+        }
+
+        return false
+    }
 
     // MARK: - Cydia URL Scheme
     // NOTE: Requires "cydia" in LSApplicationQueriesSchemes in Info.plist.
