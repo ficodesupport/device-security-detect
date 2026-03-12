@@ -42,6 +42,13 @@ import MachO
         if hasSuspiciousEnvironmentVariables() {
             return true
         }
+        if detectFridaThreads() {
+           return true
+         }
+
+        if detectHookingFrameworks() {
+          return true
+         }
 
         return false
     }
@@ -54,6 +61,57 @@ import MachO
         return false
         #endif
     }
+
+    // MARK: - Frida Thread Detection
+   func detectFridaThreads() -> Bool {
+    let suspiciousThreads = [
+        "gum-js-loop",
+        "gmain",
+        "gdbus",
+        "frida"
+    ]
+
+    let symbols = Thread.callStackSymbols
+
+    for symbol in symbols {
+
+        for suspicious in suspiciousThreads {
+
+            if symbol.lowercased().contains(suspicious) {
+                return true
+            }
+        }
+    }
+
+    return false
+}
+
+// MARK: - Hook Detection
+func detectHookingFrameworks() -> Bool {
+
+    let hookingIndicators = [
+        "MSHookFunction",
+        "fishhook",
+        "substrate"
+    ]
+
+    for i in 0..<_dyld_image_count() {
+
+        if let imageName = _dyld_get_image_name(i) {
+
+            let name = String(cString: imageName)
+
+            for hook in hookingIndicators {
+
+                if name.localizedCaseInsensitiveContains(hook) {
+                    return true
+                }
+            }
+        }
+    }
+
+    return false
+}
 
     // MARK: - Cydia URL Scheme
     // NOTE: Requires "cydia" in LSApplicationQueriesSchemes in Info.plist.
