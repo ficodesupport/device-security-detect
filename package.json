@@ -1,5 +1,5 @@
 {
-  "name": "@ficode/device-security-detect",
+  "name": "@capacitor-community/device-security-detect",
   "version": "8.0.0",
   "description": "The Device Security Detect plugin is designed to provide comprehensive device security detection capabilities for Capacitor-based applications. It aims to detect the device has been rooted (Android) or jailbroken (iOS). By using this plugin, developers can enhance the security of their applications and take appropriate actions based on the detected security status.",
   "main": "dist/plugin.cjs.js",
