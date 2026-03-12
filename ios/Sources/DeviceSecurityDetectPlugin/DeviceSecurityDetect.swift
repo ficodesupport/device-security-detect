@@ -209,7 +209,7 @@ import MachO
                 let name = String(cString: imageName)
                 for lib in suspiciousLibraries {
                     if name.localizedCaseInsensitiveContains(lib) {
-                        return true  // FIX: removed print() — leaks info in production
+                        return true
                     }
                 }
             }
@@ -230,7 +230,6 @@ import MachO
     }
 
     // MARK: - Frida Server Port Check
-    // FIX: Moved inside the class (was a free function — caused compile error)
     func isFridaServerRunning() -> Bool {
         let ports: [UInt16] = [27042, 27043]
 
@@ -252,7 +251,7 @@ import MachO
             close(socketFD)
 
             if connected == 0 {
-                return true  // FIX: removed print() — leaks info in production
+                return true
             }
         }
         return false
