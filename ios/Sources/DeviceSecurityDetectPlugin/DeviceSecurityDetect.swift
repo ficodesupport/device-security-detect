@@ -23,6 +23,7 @@ import MachO
         ) { [weak self] _ in
             guard let self = self else { return }
             if self.isJailBreak() {
+                print("Checking again after 2 mins")
                 onDetected()
             }
         }
