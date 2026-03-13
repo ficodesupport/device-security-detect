@@ -3,11 +3,11 @@
  * @description TypeScript type definitions for the DeviceSecurityDetect plugin.
  */
 
+import type { PluginListenerHandle } from '@capacitor/core';
 /**
  * @interface DeviceSecurityDetectPlugin
  * @description Defines the methods provided by the DeviceSecurityDetect plugin.
  */
-
 export interface DeviceSecurityDetectPlugin {
   /**
    * Detect if the device has been rooted (Android) or jailbroken (iOS).
@@ -28,20 +28,29 @@ export interface DeviceSecurityDetectPlugin {
   isJailBreakOrRooted(): Promise<{ value: boolean }>;
 
   /**
-   * Check if a PIN, password, or biometric authentication is enabled on the device.
+   * Starts the native 2-minute polling loop for continuous jailbreak monitoring.
+   * When a jailbreak is detected mid-session, the native side emits a
+   * `jailbreakDetected` event that can be caught via `addListener`.
    *
-   * This method checks whether the user has set up any kind of secure lock mechanism
-   * (e.g., PIN, password, or biometric authentication) on their mobile device.
-   *
-   * @returns A promise that resolves to an object containing:
-   * - `value`: A boolean indicating if secure authentication is enabled.
-   *
-   * @example
-   * ```typescript
-   * const result = await DeviceSecurityDetect.pinCheck();
-   * console.log(result.value); // true if PIN/password is enabled, false otherwise
-   * ```
-   * @since 6.0.2
+   * @since 6.0.3
    */
-  pinCheck(): Promise<{ value: boolean }>;
+  startMonitoring(): Promise<void>;
+
+  /**
+   * Registers a listener for native plugin events.
+   *
+   * Supported events:
+   * - `jailbreakDetected`: Fired by the native polling loop when a jailbreak
+   *   is detected after startup. Payload: `{ value: true }`.
+   *
+   * @param eventName - The name of the event to listen for.
+   * @param listenerFunc - Callback invoked when the event is fired.
+   * @returns A handle with a `remove()` method to unregister the listener.
+   *
+   * @since 6.0.3
+   */
+  addListener(
+    eventName: 'jailbreakDetected',
+    listenerFunc: (data: { value: boolean }) => void
+  ): Promise<PluginListenerHandle>;
 }

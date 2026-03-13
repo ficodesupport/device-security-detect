@@ -167,21 +167,49 @@ private func _hasSuspiciousDyldImagesFn() -> Bool {
 
     // MARK: - Frida Thread Detection
     func detectFridaThreads() -> Bool {
-
-        let suspiciousThreads = [
+        let suspiciousThreadNames = [
             "gum-js-loop",
             "gmain",
             "gdbus",
             "frida"
         ]
 
-        let symbols = Thread.callStackSymbols
+        var threads: thread_act_array_t?
+        var threadCount: mach_msg_type_number_t = 0
 
-        for symbol in symbols {
-            for suspicious in suspiciousThreads {
-                if symbol.lowercased().contains(suspicious) {
-                    return true
+        guard task_threads(mach_task_self_, &threads, &threadCount) == KERN_SUCCESS,
+              let threadList = threads else {
+            return false
+        }
+
+        defer {
+            // Deallocate the thread port array to avoid memory leak
+            let size = vm_size_t(threadCount) * vm_size_t(MemoryLayout<thread_t>.size)
+            vm_deallocate(mach_task_self_, vm_address_t(bitPattern: threadList), size)
+        }
+
+        for i in 0..<Int(threadCount) {
+            let thread = threadList[i]
+
+            var extInfo = thread_extended_info()
+            var extInfoCount = mach_msg_type_number_t(THREAD_EXTENDED_INFO_COUNT)
+
+            let kr = withUnsafeMutablePointer(to: &extInfo) {
+                $0.withMemoryRebound(to: integer_t.self, capacity: Int(extInfoCount)) {
+                    thread_info(thread, thread_flavor_t(THREAD_EXTENDED_INFO), $0, &extInfoCount)
                 }
+            }
+
+            guard kr == KERN_SUCCESS else { continue }
+
+            let nameBytes = Mirror(reflecting: extInfo.pth_name).children.map { $0.value as! Int8 }
+            let threadName = String(
+                bytes: nameBytes.prefix(while: { $0 != 0 }).map { UInt8(bitPattern: $0) },
+                encoding: .utf8
+            )?.lowercased() ?? ""
+
+            if suspiciousThreadNames.contains(where: { threadName.contains($0) }) {
+                return true
             }
         }
 
@@ -302,29 +330,43 @@ private func _hasSuspiciousDyldImagesFn() -> Bool {
     // MARK: - Frida Server Port Check
     func isFridaServerRunning() -> Bool {
         let ports: [UInt16] = [27042, 27043]
+        var detected = false
+        let group = DispatchGroup()
 
         for port in ports {
-            var addr = sockaddr_in()
-            addr.sin_len    = UInt8(MemoryLayout<sockaddr_in>.size)
-            addr.sin_family = sa_family_t(AF_INET)
-            addr.sin_port   = in_port_t(port).bigEndian
-            addr.sin_addr.s_addr = inet_addr("127.0.0.1")
+            group.enter()
+            DispatchQueue.global(qos: .utility).async {
+                defer { group.leave() }
 
-            let socketFD = socket(AF_INET, SOCK_STREAM, 0)
-            guard socketFD >= 0 else { continue }
+                var addr = sockaddr_in()
+                addr.sin_len    = UInt8(MemoryLayout<sockaddr_in>.size)
+                addr.sin_family = sa_family_t(AF_INET)
+                addr.sin_port   = in_port_t(port).bigEndian
+                addr.sin_addr.s_addr = inet_addr("127.0.0.1")
 
-            let connected = withUnsafePointer(to: &addr) {
-                $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
-                    connect(socketFD, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
+                let socketFD = socket(AF_INET, SOCK_STREAM, 0)
+                guard socketFD >= 0 else { return }
+
+                // Set a short timeout so we don't hang
+                var timeout = timeval(tv_sec: 0, tv_usec: 200_000) // 200ms
+                setsockopt(socketFD, SOL_SOCKET, SO_SNDTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
+                setsockopt(socketFD, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
+
+                let connected = withUnsafePointer(to: &addr) {
+                    $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                        connect(socketFD, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
+                    }
+                }
+                close(socketFD)
+
+                if connected == 0 {
+                    detected = true
                 }
             }
-            close(socketFD)
-
-            if connected == 0 {
-                return true
-            }
         }
-        return false
+
+        group.wait()
+        return detected
     }
 
     // MARK: - Environment Variable Check
