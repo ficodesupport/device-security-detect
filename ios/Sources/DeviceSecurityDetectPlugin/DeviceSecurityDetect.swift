@@ -5,6 +5,41 @@ import MachO
 
 @objc public class DeviceSecurityDetect: NSObject {
 
+    // MARK: - Periodic Check Timer
+    private var monitoringTimer: Timer?
+    private let monitoringInterval: TimeInterval = 120 // 2 minutes
+
+    /// Starts continuous jailbreak monitoring every 2 minutes.
+    /// Call this once (e.g. in AppDelegate didFinishLaunchingWithOptions).
+    @objc public func startMonitoring(onDetected: @escaping () -> Void) {
+        // Run immediately on start
+        if isJailBreak() {
+            onDetected()
+        }
+
+        monitoringTimer = Timer.scheduledTimer(
+            withTimeInterval: monitoringInterval,
+            repeats: true
+        ) { [weak self] _ in
+            guard let self = self else { return }
+            if self.isJailBreak() {
+                onDetected()
+            }
+        }
+
+        // Ensure timer fires even when scrolling (common UIKit runloop caveat)
+        if let timer = monitoringTimer {
+            RunLoop.main.add(timer, forMode: .common)
+        }
+    }
+
+    /// Stops the periodic monitoring timer.
+    @objc public func stopMonitoring() {
+        monitoringTimer?.invalidate()
+        monitoringTimer = nil
+    }
+
+    // MARK: - Main Jailbreak Check
     @objc public func isJailBreak() -> Bool {
 
         if isSimulator() {
@@ -257,7 +292,7 @@ import MachO
         return false
     }
 
-    // MARK: - Environment Variable Check (NEW)
+    // MARK: - Environment Variable Check
     // Frida and DYLD injection often rely on environment variables
     func hasSuspiciousEnvironmentVariables() -> Bool {
         let suspiciousKeys = [
