@@ -161,55 +161,57 @@ private func _hasSuspiciousDyldImagesFn() -> Bool {
     }
 
     // MARK: - Frida Thread Detection
-    func detectFridaThreads() -> Bool {
-        let suspiciousThreadNames = [
-            "gum-js-loop",
-            "gmain",
-            "gdbus",
-            "frida"
-        ]
+func detectFridaThreads() -> Bool {
+    let suspiciousThreadNames = [
+        "gum-js-loop",
+        "gmain",
+        "gdbus",
+        "frida"
+    ]
 
-        var threads: thread_act_array_t?
-        var threadCount: mach_msg_type_number_t = 0
+    var threads: thread_act_array_t?
+    var threadCount: mach_msg_type_number_t = 0
 
-        guard task_threads(mach_task_self_, &threads, &threadCount) == KERN_SUCCESS,
-              let threadList = threads else {
-            return false
-        }
-
-        defer {
-            // Deallocate the thread port array to avoid memory leak
-            let size = vm_size_t(threadCount) * vm_size_t(MemoryLayout<thread_t>.size)
-            vm_deallocate(mach_task_self_, vm_address_t(bitPattern: threadList), size)
-        }
-
-        for i in 0..<Int(threadCount) {
-            let thread = threadList[i]
-
-            var extInfo = thread_extended_info()
-            var extInfoCount = mach_msg_type_number_t(THREAD_EXTENDED_INFO_COUNT)
-
-            let kr = withUnsafeMutablePointer(to: &extInfo) {
-                $0.withMemoryRebound(to: integer_t.self, capacity: Int(extInfoCount)) {
-                    thread_info(thread, thread_flavor_t(THREAD_EXTENDED_INFO), $0, &extInfoCount)
-                }
-            }
-
-            guard kr == KERN_SUCCESS else { continue }
-
-            let nameBytes = Mirror(reflecting: extInfo.pth_name).children.map { $0.value as! Int8 }
-            let threadName = String(
-                bytes: nameBytes.prefix(while: { $0 != 0 }).map { UInt8(bitPattern: $0) },
-                encoding: .utf8
-            )?.lowercased() ?? ""
-
-            if suspiciousThreadNames.contains(where: { threadName.contains($0) }) {
-                return true
-            }
-        }
-
+    guard task_threads(mach_task_self_, &threads, &threadCount) == KERN_SUCCESS,
+          let threadList = threads else {
         return false
     }
+
+    defer {
+        let size = vm_size_t(threadCount) * vm_size_t(MemoryLayout<thread_t>.size)
+        vm_deallocate(mach_task_self_, vm_address_t(bitPattern: threadList), size)
+    }
+
+    let extInfoCount = mach_msg_type_number_t(
+        MemoryLayout<thread_extended_info>.stride / MemoryLayout<integer_t>.stride
+    )
+
+    for i in 0..<Int(threadCount) {
+        let thread = threadList[i]
+
+        var extInfo = thread_extended_info()
+        var count = extInfoCount
+
+        let kr = withUnsafeMutablePointer(to: &extInfo) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+                thread_info(thread, thread_flavor_t(THREAD_EXTENDED_INFO), $0, &count)
+            }
+        }
+
+        guard kr == KERN_SUCCESS else { continue }
+
+        let nameBytes = Mirror(reflecting: extInfo.pth_name).children.map { $0.value as! Int8 }
+        let threadName = String(
+            bytes: nameBytes.prefix(while: { $0 != 0 }).map { UInt8(bitPattern: $0) },
+            encoding: .utf8
+        )?.lowercased() ?? ""
+
+        if suspiciousThreadNames.contains(where: { threadName.contains($0) }) {
+            return true
+        }
+    }
+    return false
+}
 
     // MARK: - Hook Detection
     func detectHookingFrameworks() -> Bool {
