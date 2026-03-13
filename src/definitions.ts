@@ -53,4 +53,12 @@ export interface DeviceSecurityDetectPlugin {
     eventName: 'jailbreakDetected',
     listenerFunc: (data: { value: boolean }) => void
   ): Promise<PluginListenerHandle>;
+
+  /**
+ * Stops the native 2-minute polling loop.
+ * Call this when the app no longer needs continuous jailbreak monitoring.
+ *
+ * @since 6.0.3
+ */
+stopMonitoring(): Promise<void>;
 }

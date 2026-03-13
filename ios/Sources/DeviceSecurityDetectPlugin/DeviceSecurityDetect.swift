@@ -41,29 +41,24 @@ private func _hasSuspiciousDyldImagesFn() -> Bool {
     private let monitoringInterval: TimeInterval = 120 // 2 minutes
 
     /// Starts continuous jailbreak monitoring every 2 minutes.
-    /// Call this once (e.g. in AppDelegate didFinishLaunchingWithOptions).
-    @objc public func startMonitoring(onDetected: @escaping () -> Void) {
-        // Run immediately on start
-        if isJailBreak() {
+@objc public func startMonitoring(onDetected: @escaping () -> Void) {
+    // Immediate check is intentionally omitted here.
+    // The caller (JS layer) performs a startup check separately via isJailBreak().
+    monitoringTimer = Timer.scheduledTimer(
+        withTimeInterval: monitoringInterval,
+        repeats: true
+    ) { [weak self] _ in
+        guard let self = self else { return }
+        print("[DeviceSecurityDetect] ✅ Periodic check fired at \(Date())")
+        if self.isJailBreak() {
             onDetected()
         }
-
-        monitoringTimer = Timer.scheduledTimer(
-            withTimeInterval: monitoringInterval,
-            repeats: true
-        ) { [weak self] _ in
-            guard let self = self else { return }
-            print("[DeviceSecurityDetect] ✅ Periodic check fired at \(Date())")
-            if self.isJailBreak() {
-                onDetected()
-            }
-        }
-
-        // Ensure timer fires even when scrolling (common UIKit runloop caveat)
-        if let timer = monitoringTimer {
-            RunLoop.main.add(timer, forMode: .common)
-        }
     }
+
+    if let timer = monitoringTimer {
+        RunLoop.main.add(timer, forMode: .common)
+    }
+}
 
     /// Stops the periodic monitoring timer.
     @objc public func stopMonitoring() {

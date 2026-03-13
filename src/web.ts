@@ -46,6 +46,16 @@ export class DeviceSecurityDetectWeb extends WebPlugin implements DeviceSecurity
   }
 
   /**
+ * Stop continuous jailbreak monitoring.
+ *
+ * @returns A rejected promise indicating the method is unimplemented on the web.
+ */
+async stopMonitoring(): Promise<void> {
+    console.warn('DeviceSecurityDetect: Method stopMonitoring is not supported on the web.');
+    throw this.createUnimplementedError();
+}
+
+  /**
    * Utility method to create an exception for unimplemented functionality.
    *
    * @returns {CapacitorException} An exception with an `Unimplemented` code and a descriptive message.
