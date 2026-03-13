@@ -71,6 +71,7 @@ npx cap sync
 * [`isJailBreakOrRooted()`](#isjailbreakorrooted)
 * [`startMonitoring()`](#startmonitoring)
 * [`addListener('jailbreakDetected', ...)`](#addlistenerjailbreakdetected-)
+* [`stopMonitoring()`](#stopmonitoring)
 * [Interfaces](#interfaces)
 
 </docgen-index>
@@ -129,6 +130,20 @@ Supported events:
 | **`listenerFunc`** | <code>(data: { value: boolean; }) =&gt; void</code> | - Callback invoked when the event is fired. |
 
 **Returns:** <code>Promise&lt;<a href="#pluginlistenerhandle">PluginListenerHandle</a>&gt;</code>
+
+**Since:** 6.0.3
+
+--------------------
+
+
+### stopMonitoring()
+
+```typescript
+stopMonitoring() => Promise<void>
+```
+
+Stops the native 2-minute polling loop.
+Call this when the app no longer needs continuous jailbreak monitoring.
 
 **Since:** 6.0.3
 
