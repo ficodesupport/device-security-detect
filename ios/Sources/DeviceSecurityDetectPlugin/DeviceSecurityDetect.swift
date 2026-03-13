@@ -3,6 +3,7 @@ import UIKit
 import Darwin
 import MachO
 
+// MARK: - Free functions for hook integrity checks (must be outside class for @convention(c))
 private func _isDebuggerAttachedFn() -> Bool {
     var info = kinfo_proc()
     var size = MemoryLayout<kinfo_proc>.stride
@@ -110,9 +111,12 @@ private func _hasSuspiciousDyldImagesFn() -> Bool {
             return true
         }
 
+        // DEBUG-safe version: only checks in release builds (App Store / TestFlight)
+        #if !DEBUG
         if isDebuggerAttached() {
             return true
         }
+        #endif
 
         if isFridaServerRunning() {
             return true
