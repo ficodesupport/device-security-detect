@@ -3,6 +3,36 @@ import UIKit
 import Darwin
 import MachO
 
+private func _isDebuggerAttachedFn() -> Bool {
+    var info = kinfo_proc()
+    var size = MemoryLayout<kinfo_proc>.stride
+    var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, getpid()]
+    let result = sysctl(&mib, 4, &info, &size, nil, 0)
+    guard result == 0 else { return false }
+    return (info.kp_proc.p_flag & P_TRACED) != 0
+}
+
+private func _isSuspiciousSystemPathsExistsFn() -> Bool {
+    let paths = [
+        "/private/var/lib/apt", "/private/var/lib/cydia",
+        "/etc/apt", "/bin/bash",
+        "/Library/MobileSubstrate/MobileSubstrate.dylib",
+        "/var/jb/Library/MobileSubstrate"
+    ]
+    return paths.contains { FileManager.default.fileExists(atPath: $0) }
+}
+
+private func _hasSuspiciousDyldImagesFn() -> Bool {
+    let libs = ["Frida", "FridaGadget", "FridaAgent", "Substrate", "MobileSubstrate", "CydiaSubstrate"]
+    for i in 0..<_dyld_image_count() {
+        if let name = _dyld_get_image_name(i) {
+            let s = String(cString: name)
+            if libs.contains(where: { s.localizedCaseInsensitiveContains($0) }) { return true }
+        }
+    }
+    return false
+}
+
 @objc public class DeviceSecurityDetect: NSObject {
 
     // MARK: - Periodic Check Timer
@@ -22,8 +52,8 @@ import MachO
             repeats: true
         ) { [weak self] _ in
             guard let self = self else { return }
+            print("[DeviceSecurityDetect] ✅ Periodic check fired at \(Date())")
             if self.isJailBreak() {
-                print("Checking again after 2 mins")
                 onDetected()
             }
         }
@@ -48,15 +78,15 @@ import MachO
         }
 
         // MARK: - Function Hook Integrity Checks
-        if isFunctionHooked(unsafeBitCast(self.isDebuggerAttached as @convention(c) () -> Bool, to: UnsafeRawPointer.self)) {
+        if isFunctionHooked(unsafeBitCast(_isDebuggerAttachedFn as @convention(c) () -> Bool, to: UnsafeRawPointer.self)) {
             return true
         }
 
-        if isFunctionHooked(unsafeBitCast(self.isSuspiciousSystemPathsExists as @convention(c) () -> Bool, to: UnsafeRawPointer.self)) {
+        if isFunctionHooked(unsafeBitCast(_isSuspiciousSystemPathsExistsFn as @convention(c) () -> Bool, to: UnsafeRawPointer.self)) {
             return true
         }
 
-        if isFunctionHooked(unsafeBitCast(self.hasSuspiciousDyldImages as @convention(c) () -> Bool, to: UnsafeRawPointer.self)) {
+        if isFunctionHooked(unsafeBitCast(_hasSuspiciousDyldImagesFn as @convention(c) () -> Bool, to: UnsafeRawPointer.self)) {
             return true
         }
 
@@ -308,7 +338,6 @@ import MachO
     }
 
     // MARK: - Suspicious Apps Path List
-    // FIX: Added modern jailbreak paths (Dopamine / palera1n use /var/jb prefix)
     var suspiciousAppsPathToCheck: [String] {
         return [
             "/Applications/Cydia.app",
@@ -322,7 +351,6 @@ import MachO
     }
 
     // MARK: - Suspicious System Path List
-    // FIX: Added modern jailbreak paths (Dopamine / palera1n use /var/jb prefix)
     var suspiciousSystemPathsToCheck: [String] {
         return [
             // Classic paths

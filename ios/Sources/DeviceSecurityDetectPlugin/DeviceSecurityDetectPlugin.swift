@@ -11,7 +11,7 @@ public class DeviceSecurityDetectPlugin: CAPPlugin, CAPBridgedPlugin {
     private let implementation = DeviceSecurityDetect()
 
     @objc func isJailBreakOrRooted(_ call: CAPPluginCall) {
-        log("Checking if device is jailbroken from plugin")
+        print("[DeviceSecurityDetectPlugin] Checking if device is jailbroken")
         call.resolve([
             "value": implementation.isJailBreak()
         ])
